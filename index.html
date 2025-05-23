@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF → JPG Converter (Client‑side)</title>
+
+    <!-- Tailwind CSS CDN → シンプルな UI -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <!-- ======================
+        pdf.js (Legacy UMD build)
+        ----------------------
+        v2.16 系は純粋な <script> だけで
+        "pdfjsLib" グローバルが注入されます。
+        v3 以降の ESM ビルドで出ていた
+        import.meta / export エラーを回避。
+    ======================= -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+      // ワーカーの場所を pdf.worker.min.js に差し替え
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    </script>
+
+    <!-- JSZip ＆ FileSaver.js → ZIP 生成と保存に使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-gray-100 flex flex-col items-center p-4">
+    <h1 class="text-2xl font-bold mb-4">PDF → JPG コンバータ</h1>
+
+    <!-- アップロード & ドロップゾーン -->
+    <label
+      id="dropzone"
+      for="fileInput"
+      class="w-full max-w-xl border-2 border-dashed border-gray-400 rounded-2xl p-8 flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-gray-50 transition"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-12 w-12 mb-3"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+      <p class="text-gray-600">クリックまたはドラッグ＆ドロップで PDF を選択</p>
+      <input id="fileInput" type="file" accept="application/pdf" class="hidden" />
+    </label>
+
+    <!-- 全ダウンロードボタン -->
+    <button
+      id="downloadAllBtn"
+      class="mt-6 px-6 py-2 bg-blue-600 text-white rounded-xl shadow disabled:opacity-40"
+      disabled
+    >
+      すべてを ZIP でダウンロード
+    </button>
+
+    <!-- 生成サムネイル置き場 -->
+    <section id="thumbs" class="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full max-w-6xl"></section>
+
+    <!-- メインロジック -->
+    <script>
+      const fileInput = document.getElementById("fileInput");
+      const dropzone = document.getElementById("dropzone");
+      const thumbs = document.getElementById("thumbs");
+      const downloadAllBtn = document.getElementById("downloadAllBtn");
+
+      let jpgBlobs = [];
+
+      // ファイル選択/ドロップ
+      function handleFiles(files) {
+        const file = files[0];
+        if (!file || file.type !== "application/pdf") return;
+
+        // UI リセット
+        thumbs.innerHTML = "";
+        jpgBlobs = [];
+        downloadAllBtn.disabled = true;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const typedArray = new Uint8Array(e.target.result);
+
+          const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+          const total = pdf.numPages;
+
+          for (let pageNum = 1; pageNum <= total; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 2 }); // 解像度調整 (2x)
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            // JPG Blob 生成
+            canvas.toBlob(
+              (blob) => {
+                const url = URL.createObjectURL(blob);
+                jpgBlobs.push({ name: `page-${pageNum}.jpg`, blob });
+
+                // サムネイル表示 & 個別 DL
+                const card = document.createElement("div");
+                card.className = "bg-white rounded-xl shadow p-4 flex flex-col items-center";
+                const img = document.createElement("img");
+                img.src = url;
+                img.className = "max-h-52 object-contain mb-2";
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `page-${pageNum}.jpg`;
+                link.textContent = `ページ ${pageNum} を保存`;
+                link.className = "text-blue-600 hover:underline";
+                card.appendChild(img);
+                card.appendChild(link);
+                thumbs.appendChild(card);
+
+                if (jpgBlobs.length === total) {
+                  downloadAllBtn.disabled = false;
+                }
+              },
+              "image/jpeg",
+              0.92 // Jpeg quality
+            );
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      // ZIP ダウンロード
+      downloadAllBtn.addEventListener("click", async () => {
+        const zip = new JSZip();
+        jpgBlobs.forEach(({ name, blob }) => {
+          zip.file(name, blob);
+        });
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, "pdf-pages.zip");
+      });
+
+      // Input change
+      fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
+
+      // ドロップ
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
+        dropzone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
+      ["dragenter", "dragover"].forEach((evt) => {
+        dropzone.addEventListener(evt, () => dropzone.classList.add("bg-gray-200"));
+      });
+      ["dragleave", "drop"].forEach((evt) => {
+        dropzone.addEventListener(evt, () => dropzone.classList.remove("bg-gray-200"));
+      });
+      dropzone.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
+    </script>
+  </body>
+</html>
