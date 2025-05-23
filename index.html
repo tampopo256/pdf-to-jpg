@@ -6,7 +6,7 @@
     <title>PDF → JPG Converter (Client‑side)</title>
 
     <!-- Tailwind CSS CDN → シンプルな UI -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="libs/tailwindcss.js"></script>
 
     <!-- ======================
         pdf.js (Legacy UMD build)
@@ -16,16 +16,16 @@
         v3 以降の ESM ビルドで出ていた
         import.meta / export エラーを回避。
     ======================= -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="libs/pdf.js"></script>
     <script>
       // ワーカーの場所を pdf.worker.min.js に差し替え
       pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+        "libs/pdf.worker.js";
     </script>
 
     <!-- JSZip ＆ FileSaver.js → ZIP 生成と保存に使用 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="libs/jszip.min.js"></script>
+    <script src="libs/FileSaver.min.js"></script>
   </head>
   <body class="min-h-screen bg-gray-100 flex flex-col items-center p-4">
     <h1 class="text-2xl font-bold mb-4">PDF → JPG コンバータ</h1>
