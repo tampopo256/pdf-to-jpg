@@ -56,10 +56,13 @@
       const downloadAllBtn = document.getElementById("downloadAllBtn");
 
       let jpgBlobs = [];
+      let baseFileName = "pdf-pages";
 
       function handleFiles(files) {
         const file = files[0];
         if (!file || file.type !== "application/pdf") return;
+
+        baseFileName = file.name.replace(/\.[^/.]+$/, "");
 
         thumbs.innerHTML = "";
         jpgBlobs = [];
@@ -85,7 +88,8 @@
             canvas.toBlob(
               (blob) => {
                 const url = URL.createObjectURL(blob);
-                jpgBlobs.push({ name: `page-${pageNum}.jpg`, blob });
+                const imageFileName = `${baseFileName}-page-${pageNum}.jpg`;
+                jpgBlobs.push({ name: imageFileName, blob });
 
                 const card = document.createElement("div");
                 card.className = "bg-white rounded-xl shadow p-4 flex flex-col items-center";
@@ -94,7 +98,7 @@
                 img.className = "max-h-52 object-contain mb-2";
                 const link = document.createElement("a");
                 link.href = url;
-                link.download = `page-${pageNum}.jpg`;
+                link.download = imageFileName;
                 link.textContent = `ページ ${pageNum} を保存`;
                 link.className = "text-blue-600 hover:underline";
                 card.appendChild(img);
@@ -106,7 +110,7 @@
                 }
               },
               "image/jpeg",
-              0.92 // Jpeg quality
+              0.92 
             );
           }
         };
@@ -119,7 +123,7 @@
           zip.file(name, blob);
         });
         const content = await zip.generateAsync({ type: "blob" });
-        saveAs(content, "pdf-pages.zip");
+        saveAs(content, `${baseFileName}.zip`);
       });
 
       fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
